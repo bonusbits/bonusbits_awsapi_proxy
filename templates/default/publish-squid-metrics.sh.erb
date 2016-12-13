@@ -1,0 +1,10 @@
+#!/bin/bash
+
+totalrequests=$(squidclient -p <%= node['bonusbits_awsapi_proxy']['squid']['port'] %> mgr:5min | grep "client_http.requests" | cut -d " " -f3 | cut -d "/" -f1)
+hitrequests=$(squidclient -p <%= node['bonusbits_awsapi_proxy']['squid']['port'] %> mgr:5min | grep "client_http.hits" | cut -d " " -f3 | cut -d "/" -f1)
+totalkbytes=$(squidclient -p <%= node['bonusbits_awsapi_proxy']['squid']['port'] %> mgr:5min | grep "client_http.kbytes_out" | cut -d " " -f3 | cut -d "/" -f1)
+cachesize=$(du -s /var/spool/squid | sed 's/^\([0-9]*\).*/\1/')
+aws cloudwatch put-metric-data --region "<%= node['bonusbits_awsapi_proxy']['aws']['region'] %>" --namespace "SquidProxy" --metric-name "TotalRequestsPerSecond" --unit "Count/Second" --dimensions "StackName=<%= node['bonusbits_awsapi_proxy']['aws']['stack_name'] %>" --value "$totalrequests" --timestamp "$(date -u "+%Y-%m-%dT%H:%M:%SZ")"
+aws cloudwatch put-metric-data --region "<%= node['bonusbits_awsapi_proxy']['aws']['region'] %>" --namespace "SquidProxy" --metric-name "HitRequestsPerSecond" --unit "Count/Second" --dimensions "StackName=<%= node['bonusbits_awsapi_proxy']['aws']['stack_name'] %>" --value "$hitrequests" --timestamp "$(date -u "+%Y-%m-%dT%H:%M:%SZ")"
+aws cloudwatch put-metric-data --region "<%= node['bonusbits_awsapi_proxy']['aws']['region'] %>" --namespace "SquidProxy" --metric-name "TotalKbytesPerSecond" --unit "Kilobytes/Second" --dimensions "StackName=<%= node['bonusbits_awsapi_proxy']['aws']['stack_name'] %>" --value "$totalkbytes" --timestamp "$(date -u "+%Y-%m-%dT%H:%M:%SZ")"
+aws cloudwatch put-metric-data --region "<%= node['bonusbits_awsapi_proxy']['aws']['region'] %>" --namespace "SquidProxy" --metric-name "DiskCacheSize" --unit "Kilobytes" --dimensions "StackName=<%= node['bonusbits_awsapi_proxy']['aws']['stack_name'] %>" --value "$cachesize" --timestamp "$(date -u "+%Y-%m-%dT%H:%M:%SZ")"

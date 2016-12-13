@@ -1,0 +1,10 @@
+[general]
+state_file = /var/lib/awslogs/agent-state
+[access.log]
+log_group_name = <%= node['bonusbits_awsapi_proxy']['logs']['cloudwatch_log_group'] %>
+log_stream_name = <%= node['bonusbits_awsapi_proxy']['aws']['stack_name'] %>-access-<%= node['bonusbits_awsapi_proxy']['aws']['instance_id'] %>
+file = /var/log/squid/access.log*
+[cache.log]
+log_group_name = <%= node['bonusbits_awsapi_proxy']['logs']['cloudwatch_log_group'] %>
+log_stream_name = <%= node['bonusbits_awsapi_proxy']['aws']['stack_name'] %>-cache-<%= node['bonusbits_awsapi_proxy']['aws']['instance_id'] %>
+file = /var/log/squid/cache.log*

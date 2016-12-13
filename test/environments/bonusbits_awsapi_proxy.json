@@ -1,0 +1,25 @@
+{
+  "name": "bonusbits_awsapi_proxy",
+  "description": "Environment",
+  "cookbook_versions": {},
+  "json_class": "Chef::Environment",
+  "chef_type": "environment",
+  "default_attributes": {
+  },
+  "override_attributes": {
+    "bonusbits_awsapi_proxy": {
+      "aws": {
+        "vpc_cidr_block": "10.0.0.0/16",
+        "stack_name": "dev-proxy-test"
+      },
+      "logs": {
+        "cloudwatch_log_group": "test-kitchen"
+      },
+      "squid": {
+        "deploy_bucket_path": "mybucket/binaries",
+        "port": "3128",
+        "rpm_filename": "squid-3.5.11-1.el6.x86_64.rpm"
+      }
+    }
+  }
+}

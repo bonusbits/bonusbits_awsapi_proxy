@@ -1,0 +1,14 @@
+{
+  "name": "bonusbits_awsapi_proxy",
+  "description": "Role",
+  "json_class": "Chef::Role",
+  "default_attributes": {},
+  "override_attributes": {
+  },
+  "chef_type": "role",
+  "run_list": [
+    "recipe[bonusbits_awsapi_proxy]"
+  ],
+  "env_run_lists": {
+  }
+}
