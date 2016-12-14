@@ -11,6 +11,7 @@ DNS Script setup to update Route53 Internal DNS when new one spins up.
 
 # Prerequisites
 * VPC with Public and Private subnets
+* Git LFS installed if running from clone locally
 
 # Default Allowed Access
 1. AWS Service APIs (i.e. CFN Init, ECS, SNS, SES)
