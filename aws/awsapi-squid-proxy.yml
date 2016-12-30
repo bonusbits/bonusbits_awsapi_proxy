@@ -6,9 +6,6 @@ Parameters:
   Owner:
     Type: String
     Default: FirstName LastName
-  Project:
-    Type: String
-    Default: Squid Proxy Creation
   DeleteAfter:
     Type: String
     Default: 00/00/201x
@@ -18,10 +15,13 @@ Parameters:
     Type: AWS::EC2::VPC::Id
   PublicSubnetIdList:
     Description: Public Subnet ID List.
-    Type: CommaDelimitedList
-  RemoteSecurityGroup:
-    Type: AWS::EC2::SecurityGroup::Id
-    Description: SSH Access Network.
+    Type: List<AWS::EC2::Subnet::Id>
+  ProxySecurityGroupCidr:
+    # TODO: Make List?
+    Type: String
+  OtherSecurityGroupsList:
+    Type: List<AWS::EC2::SecurityGroup::Id>
+    Description: "Optional - Other Security Groups (Can be Blank)"
   ProxyFqdn:
     Type: String
     Description: Hosted Route53 Domain FQDN (proxy.example.com).
@@ -40,41 +40,13 @@ Parameters:
     - c3.medium
     - c4.medium
     Default: t2.nano
-  StorageType:
-    Type: String
-    Default: EBS
-    AllowedValues:
-    - EBS
-    - InstanceStore
 
   # Deployment
-  Environment:
-    Type: String
-    Default: 'dev'
-    AllowedValues:
-      - 'dev'
-      - 'prd'
-  ChefClientVersion:
-    Type: String
-    Default: 12.15.19-1
-  S3DeployBucketPath:
-    Type: String
-    Default: bucket-name/prefix
-    Description: Bucket name or Bucket name with subfolders. NO Trailing forward slash.
-    AllowedPattern: ".*\\/$"
-    ConstraintDescription: Should be bucket-name/prefix or bucket-name. NO Trailing Forward Slaches.
-  ChefEnvironment:
-    Type: String
-  ChefRole:
-    Type: String
   SquidPort:
     Type: Number
     MinValue: '1'
     MaxValue: '65535'
     Default: '3128'
-  SquidRpmFilename:
-    Type: String
-    Default: 'squid-3.5.11-1.el6.x86_64.rpm'
 
 Mappings:
   RegionMap:
@@ -115,6 +87,15 @@ Mappings:
     cn-north-1:
       InstanceStore: ami-81eb3fec
       EBS: ami-7c15c111
+  Deploy:
+    Packages:
+      GitLfsVersion: 1.5.4-1
+    Chef:
+      CookbookName: bonusbits_awsapi_proxy
+      Environment: bonusbits_awsapi_proxy
+      Role: bonusbits_awsapi_proxy
+      ClientVersion: 12.16.42
+      CookbookVersion: 1.0.0
 
 Conditions:
   HasKeyPair: !Not [!Equals [ !Ref KeyPairName, '' ]]
@@ -151,7 +132,6 @@ Resources:
           Action:
           - s3:Get*
           - s3:List*
-          Resource: !Join [ '', [ !Ref "arn:aws:s3:::", !Ref S3DeployBucketPath, "*" ] ]
           Resource: "*"
         # Allow Read/Write Route53 for Userdata Script DNS A Record Set
         - Effect: Allow
@@ -199,7 +179,7 @@ Resources:
       - IpProtocol: tcp
         FromPort: !Ref SquidPort
         ToPort: !Ref SquidPort
-        CidrIp: !GetAtt VPC.CidrBlock
+        CidrIp: !Ref ProxySecurityGroupCidr
       SecurityGroupEgress:
       - IpProtocol: "-1"
         FromPort: "-1"
@@ -210,8 +190,6 @@ Resources:
           Value: !Ref "AWS::StackName"
         - Key: Owner
           Value: !Ref Owner
-        - Key: Project
-          Value: !Ref Project
         - Key: DeleteAfter
           Value: !Ref DeleteAfter
 
@@ -233,9 +211,6 @@ Resources:
       - Key: Owner
         Value: !Ref Owner
         PropagateAtLaunch: true
-      - Key: Project
-        Value: !Ref Project
-        PropagateAtLaunch: true
       - Key: DeleteAfter
         Value: !Ref DeleteAfter
         PropagateAtLaunch: true
@@ -250,200 +225,252 @@ Resources:
 
   LaunchConfiguration:
     Type: AWS::AutoScaling::LaunchConfiguration
+    DependsOn:
+      - ProxySecurityGroup
+      - IamInstanceProfile
     Properties:
-      IamInstanceProfile: !Ref EC2InstanceProfile
-      AssociatePublicIpAddress: 'true'
+      IamInstanceProfile: !Ref IamInstanceProfile
+      AssociatePublicIpAddress: true
       InstanceType: !Ref InstanceType
       KeyName: !Ref KeyPairName
       SecurityGroups:
       - !Ref ProxySecurityGroup
-      - !Ref RemoteSecurityGroup
-      ImageId: !FindInMap [ !Ref RegionMap, !Ref "AWS::Region", !Ref StorageType ]
-      InstanceMonitoring: 'false'
+      - !Ref OtherSecurityGroupsList
+      ImageId: !FindInMap [ RegionMap, !Ref "AWS::Region", EBS ]
+      InstanceMonitoring: false
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            DeleteOnTermination: true
+            VolumeType: gp2
+            VolumeSize: 8
       UserData:
-        Fn::Base64:
-          Fn::Join:
-          - ''
-          - - "#!/bin/bash\n"
-            - 'cd /home/ec2-user
-
-'
-            - aws s3 cp "s3://
-            - !Ref S3Location
-            - 'squidproxyfarm-setup.zip" ./
-
-'
-            - 'unzip ./squidproxyfarm-setup.zip
-
-'
-            - 'cd squidproxyfarm-setup
-
-'
-            - 'chmod +x ./script.sh
-
-'
-            - ./script.sh "
-            - Fn::If:
-              - SupportProxyProtocol
-              - '3.5'
-              - "<3.5"
-            - '" "'
-            - !Ref SquidPort
-            - '" "'
-            - !Ref AWS::StackName
-            - '" "'
-            - !Ref CloudWatchLogsGroup
-            - "\" 2>&1 | tee script.log\n"
-
-  ProxyRoute:
-    Type: AWS::EC2::Route
-    DependsOn: NatGateway
-    Properties:
-      RouteTableId: !Ref PrivateRouteTable
-      DestinationCidrBlock: 0.0.0.0/0
-      NatGatewayId: !Ref NatGateway
+        Fn::Base64: !Sub
+            - '#!/bin/bash -xe
+              yum update -y
+              yum install -y aws-cfn-bootstrap cloud-init aws-cli git
+              rpm -ivh https://packagecloud.io/github/git-lfs/packages/el/6/git-lfs-${GitLfsVersion}.el6.x86_64.rpm/download
+              /opt/aws/bin/cfn-init -v --stack ${StackName} --resource LaunchConfiguration --region ${Region} --configsets ec2_setup
+              /opt/aws/bin/cfn-signal -e $? --stack ${StackName} --resource AutoScalingGroup --region ${Region}'
+            - {
+                GitLfsVersion: !FindInMap [ Deploy, Packages, GitLfsVersion ],
+                StackName: !Ref "AWS::StackName",
+                Region: !Ref "AWS::Region"
+              }
+    Metadata:
+      AWS::CloudFormation::Init:
+        configSets:
+          ec2_setup:
+            - config_cfn
+            - install_chef_client
+            - setup_chef_client
+            - run_chef_client
+            - update_dns
+            - warm_ebs
+        config_cfn:
+          files:
+            "/etc/cfn/cfn-hup.conf":
+              content: !Sub |
+                [main]
+                stack=${AWS::StackId}
+                region=${AWS::Region}
+              mode: '000400'
+              owner: root
+              group: root
+            "/etc/cfn/hooks.d/cfn-auto-reloader.conf":
+              content: !Sub |
+                [cfn-auto-reloader-hook]
+                triggers=post.update
+                path=Resources.LaunchConfiguration.Metadata.AWS::CloudFormation::Init
+                action=/opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource LaunchConfiguration --region ${AWS::Region} --configsets ec2_setup
+                runas=root
+          services:
+            sysvinit:
+              cfn-hup:
+                enabled: true
+                ensureRunning: true
+                files:
+                  - /etc/cfn/cfn-hup.conf
+                  - /etc/cfn/hooks.d/cfn-auto-reloader.conf
+        install_chef_client:
+          commands:
+            01_install_chef_client: !Sub
+            - "curl -L https://omnitruck.chef.io/install.sh | sudo bash -s -- -v ${ChefClientVersion}"
+            - {
+                ChefClientVersion: !FindInMap [ Deploy, Chef, ClientVersion ]
+              }
+        setup_chef_client:
+          commands:
+            01_mkdir_chef_repo:
+              command: "mkdir -p /opt/chef-repo"
+            02_mkdir_chef_repo_subdirs:
+              cwd: /opt/chef-repo
+              command: "mkdir -p cookbooks checksums environments cache backup data_bags roles downloads"
+            03_download_proxy_cookbook:
+              cwd: /opt/chef-repo/cookbooks
+              command: "git clone https://github.com/bonusbits/bonusbits_awsapi_proxy.git"
+            04_checkout_version:
+              cwd: /opt/chef-repo/cookbooks/bonusbits_awsapi_proxy
+              command: !Sub
+                - "git checkout ${CookbookVersion}"
+                - {
+                    CookbookVersion: !FindInMap [ Deploy, Chef, CookbookVersion ]
+                  }
+            05_download_lfs_artifacts:
+              cwd: /opt/chef-repo/cookbooks/bonusbits_awsapi_proxy
+              command: "git lfs pull"
+            06_download_library_cookbook:
+              cwd: /opt/chef-repo/cookbooks
+              command: "git clone https://github.com/bonusbits/bonusbits_library.git"
+          files:
+            "/opt/chef-repo/client.rb":
+              content: !Sub |
+                node_name '$(curl -s http://169.254.169.254/latest/meta-data/placement/instance-id)'
+                checksum_path '/opt/chef-repo/checksums'
+                file_cache_path '/opt/chef-repo/cache'
+                file_backup_path '/opt/chef-repo/backup'
+                cookbook_path '/opt/chef-repo/cookbooks'
+                environment_path '/opt/chef-repo/environments'
+                data_bag_path '/opt/chef-repo/data_bags'
+                encrypted_data_bag_secret '/opt/chef-repo/data_bags/encrypted_data_bag_secret'
+                role_path '/opt/chef-repo/roles'
+                chef_server_url 'http://127.0.0.1:8889'
+            "/opt/chef-repo/environments/${ChefEnvironment}.json":
+              content: !Sub
+                - '{
+                    "name": "${ChefEnvironment}",
+                    "description": "Environment",
+                    "cookbook_versions": {},
+                    "json_class": "Chef::Environment",
+                    "chef_type": "environment",
+                    "default_attributes": {
+                    },
+                    "override_attributes": {
+                      "bonusbits_awsapi_proxy": {
+                        "aws": {
+                          "allowed_cidr_block": "${AllowedCidr}",
+                          "stack_name": "${StackName}"
+                        },
+                        "logs": {
+                          "cloudwatch_log_group": "${CloudWatchLogsGroup}"
+                        },
+                        "squid": {
+                          "port": "${SquidPort}"
+                        }
+                      }
+                    }
+                  }'
+                - {
+                    ChefEnvironment: !FindInMap [ Deploy, Chef, Environment ],
+                    AllowedCidr: !Ref ProxySecurityGroupCidr,
+                    StackName: !Ref "AWS::StackName",
+                    CloudWatchLogsGroup: !Ref CloudWatchLogsGroup,
+                    SquidPort: !Join [ "", [ !Ref SquidPort ] ] # Has to be a String
+                  }
+            "/opt/chef-repo/roles/${ChefRole}.json":
+              content: !Sub
+                - '{
+                    "name": "${ChefRole}",
+                    "description": "Role",
+                    "json_class": "Chef::Role",
+                    "default_attributes": {},
+                    "override_attributes": {
+                    },
+                    "chef_type": "role",
+                    "run_list": [
+                      "recipe[${CookbookName}]"
+                    ],
+                    "env_run_lists": {
+                    }
+                  }'
+                - {
+                    ChefRole: !FindInMap [ Deploy, Chef, Role ],
+                    CookbookName: !FindInMap [ Deploy, Chef, CookbookName ],
+                  }
+        run_chef_client:
+          commands:
+            01_run_chef:
+              cwd: /opt/chef-repo
+              command: !Sub
+                - /opt/chef/bin/chef-client -z -o 'role[${ChefRole}]' --environment ${ChefEnvironment} --config /opt/chef-repo/client.rb --log_level info --force-formatter --chef-zero-port 8889
+                - {
+                    ChefRole: !FindInMap [ Deploy, Chef, Role ],
+                    ChefEnvironment: !FindInMap [ Deploy, Chef, Environment ],
+                  }
+        update_dns:
+          commands:
+            01_update_dns:
+              cwd: /opt/chef-repo
+              command: "/opt/chef-repo/update-dns.sh"
+        warm_ebs:
+          commands:
+            01_warm_ebs:
+              command: "# echo 'ACTION: Performing EBS Warming' && dd if=/dev/xvda of=/dev/xvda conv=notrunc bs=1M status=progress"
 
   # CloudWatch
   CloudWatchLogsGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      RetentionInDays: '14'
+      LogGroupName: !Ref "AWS::StackName"
+      RetentionInDays: '30'
 
 Outputs:
   # Ownership
   Owner:
     Description: Team or Individual that Owns this Formation.
     Value: !Ref Owner
-  Project:
-    Description: The project name.
-    Value: !Ref Project
   DeleteAfter:
     Description: It is ok to delete the Formation after this date.
     Value: !Ref DeleteAfter
 
-  # Squid
-  SquidELBName:
-    Description: Name of Squid proxy squid ELB
-    Value:
-      !Ref ElasticLoadBalancer
-  SquidURL:
-    Description: URL of Squid proxy squid ELB
-    Value:
-      Fn::Join:
-      - ''
-      - - http://
-        - Fn::GetAtt:
-          - ElasticLoadBalancer
-          - DNSName
-        - ":"
-        - !Ref SquidPort
-  SquidDNSName:
-    Description: DNS Name of Squid proxy squid ELB
-    Value:
-      Fn::GetAtt:
-      - ElasticLoadBalancer
-      - DNSName
-
-  # Instance Settings
-  AMI:
-    Description: AMI Used.
-    Value: !FindInMap [ !Ref RegionMap, !Ref "AWS::Region", !Ref StorageType ]
-  InstanceType:
-    Description: Instance Type Used.
-    Value: !Ref InstanceType
-  Ec2KeyPair:
-    Description: Key Pair Used.
-    Value: !Ref Ec2KeyPair
-  InternalAccessSecurityGroup:
-    Description: Instance to Instance Access Security Group Selected.
-    Value: !Ref InternalAccessSecurityGroup
-  RemoteSecurityGroup:
-    Description: Remote to Instance Access Security Group Selected.
-    Value: !Ref RemoteSecurityGroup
-  RdsSecurityGroup:
-    Description: RDS to Instance Access Security Group Selected.
-    Value: !Ref RdsSecurityGroup
-  EfsSecurityGroup:
-    Description: EFS to Instance Access Security Group Selected.
-    Value: !Ref EfsSecurityGroup
-  IAMRole:
-    Description: IAM Instance Profile Role Created.
-    Value: !Ref IamRole
   # Network
   VPC:
     Description: VPC Used.
     Value: !Ref VPC
-  PublicSubnets:
-    Description: Public Subnets ELB Deployed to.
-    Value: !Join [ ',' !Ref PublicSubnetIdList ]
-  # Load Balancer
-  ElbStickySessions:
-    Description: Enable ELB Stickiness Option.
-    Value: !Ref ElbStickySessions
-  ElbSslCertArn:
-    Description: ELB SSL Cert ARN
-    Value: !Ref ElbSslCertArn
-  CookieExpirationPeriod:
-    Condition: ConfigureStickiness
-    Description: Cookie Expireation Period for ELB Stickiness Option.
-    Value: !Ref CookieExpirationPeriod
-  SetupElbLogging:
-    Description: Configure ELB S3 Bucket Logging Option.
-    Value: !Ref SetupElbLogging
-  ElbFQDN:
-    Description: FQDN of ELB
-    Value: !GetAtt LoadBalancer.DNSName
-  LoadBalancer:
-    Description: Elastic Load Balancer.
-    Value: !Ref LoadBalancer
-  InternetToElbSecurityGroup:
-    Description: Internet To ELB Access Security Group.
-    Value: !Ref InternetToElbSecurityGroup
-  InstanceToElbSecurityGroup:
-    Description: Instance To ELB Access Security Group.
-    Value: !Ref InstanceToElbSecurityGroup
-  S3LoggingBucket:
-    Condition: ConfigureElbLogging
-    Description: Logging S3 Bucket.
-    Value: !Ref S3LoggingBucket
-  # EFS
-  EfsMountPoint1:
-    Description: EFS Mount Point 1
-    Value: !Ref EfsMountPoint1
-  EfsMountPoint2:
-    Description: EFS Mount Point 2
-    Value: !Ref EfsMountPoint2
-  EfsFileSystemId1:
-    Description: EFS Mount Point 1
-    Value: !Ref EfsFileSystemId1
-  EfsFileSystemId2:
-    Description: EFS Mount Point 2
-    Value: !Ref EfsFileSystemId2
-  EfsMountOwner1:
-    Description: EFS Mount Owner for FS 1
-    Value: !Ref EfsMountOwner1
-  EfsMountOwner2:
-    Description: EFS Mount Owner for FS 2
-    Value: !Ref EfsMountOwner2
+  PublicSubnetIdList:
+    Description: Public Subnets List to Deploy Proxy.
+    Value: !Join [ ",", !Ref PublicSubnetIdList ]
+  ProxySecurityGroupCidr:
+    Description: CIDR to Allow Through Proxy (Usually VPC).
+    Value: !Ref ProxySecurityGroupCidr
+  OtherSecurityGroupsList:
+    Description: Other Elected Security Groups List.
+    Value: !Join [ ",", !Ref OtherSecurityGroupsList ]
+  ProxyURL:
+    Description: Proxy URL
+    Value: !Join [ "", [ "http://", !Ref ProxyFqdn, ":", !Ref SquidPort ] ]
+
+  # Instance Settings
+  AMI:
+    Description: AMI Used.
+    Value: !FindInMap [ RegionMap, !Ref "AWS::Region", EBS ]
+  InstanceType:
+    Description: Instance Type Used.
+    Value: !Ref InstanceType
+  KeyPairName:
+    Description: Key Pair Name Used.
+    Value: !Ref KeyPairName
+  IAMRole:
+    Description: IAM Instance Profile Role Created.
+    Value: !Ref IamRole
+
   # Deployment
   ChefClientVersion:
     Description: Chef Client Version
-    Value: !Ref ChefClientVersion
-  S3DeployBucketName:
-    Description: S3 Deployment Bucket Name
-    Value: !Ref S3DeployBucketName
+    Value: !FindInMap [ Deploy, Chef, ClientVersion ]
   CookbookVersion:
     Description: CookbookVersion Version
-    Value: !Ref CookbookVersion
+    Value: !FindInMap [ Deploy, Chef, CookbookVersion ]
   ChefEnvironment:
     Description: Chef Environment
-    Value: !Ref ChefEnvironment
+    Value: !FindInMap [ Deploy, Chef, Environment ]
   ChefRole:
     Description: Chef Role
-    Value: !Ref ChefRole
-  WebContentVersion:
-    Description: Web Content Version
-    Value: !Ref WebContentVersion
+    Value: !FindInMap [ Deploy, Chef, Role ]
+  SquidPort:
+    Description: Squid TCP Port
+    Value: !Join [ "", [ !Ref SquidPort ] ]
+
 Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
@@ -451,128 +478,49 @@ Metadata:
           default: Ownership
         Parameters:
           - Owner
-          - Project
           - DeleteAfter
-      - Label:
-          default: Auto Scale Group
-        Parameters:
-          - MinAutoScaleCount
-          - MaxAutoScaleCount
-          - AsgSnsTopicArn
-      - Label:
-          default: Instance Settings
-        Parameters:
-          - AMI
-          - InstanceType
-          - Ec2KeyPair
-          - InternalAccessSecurityGroup
-          - RemoteSecurityGroup
-          - RdsSecurityGroup
-          - EfsSecurityGroup
       - Label:
           default: Network
         Parameters:
           - VPC
-          - PublicSubnetList
-          - PrivateSubnetList
+          - PublicSubnetIdList
+          - ProxySecurityGroupCidr
+          - OtherSecurityGroupsList
+          - ProxyFqdn
       - Label:
-          default: Load Balancer
+          default: Instance
         Parameters:
-          - ElbStickySessions
-          - ElbSslCertArn
-          - CookieExpirationPeriod
-          - SetupElbLogging
-      - Label:
-          default: EFS
-        Parameters:
-          - EfsMountPoint1
-          - EfsMountPoint2
-          - EfsFileSystemId1
-          - EfsFileSystemId2
-          - EfsMountOwner1
-          - EfsMountOwner2
+          - KeyPairName
+          - InstanceType
       - Label:
           default: Deployment
         Parameters:
-          - ChefClientVersion
-          - S3DeployBucketName
-          - CookbookName
-          - CookbookVersion
-          - ChefEnvironment
-          - ChefRole
-          - ChefDataBagSecret
-          - WebContentVersion
+          - SquidPort
     ParameterLabels:
       # Ownership
       Owner:
         default: Team or Individual Owner
       DeleteAfter:
         default: Delete After Date
-      # Auto Scale Group
-      MinAutoScaleCount:
-        default: Minimum Count
-      MaxAutoScaleCount:
-        default: Maximum Count
-      AsgSnsTopicArn:
-        default: SNS Topic ARN
-      # Instance Settings
-      InstanceType:
-        default: Instance Type
-      Ec2KeyPair:
-        default: EC2 Keypair
-      InternalAccessSecurityGroup:
-        default: Instance-to-Instance SG
-      RemoteSecurityGroup:
-        default: Remote-to-Instance SG
-      RdsSecurityGroup:
-        default: RDS-to-Instance SG
-      EfsSecurityGroup:
-        default: EFS-to-Instance SG
-      IAMRole:
-        default: IAM Role
+
       # Network
       VPC:
         default: VPC ID
-      PublicSubnetList:
-        default: Public Subnet List
-      PrivateSubnetList:
-        default: Private Subnet List
-      # Load Balancer
-      ElbStickySessions:
-        default: Stickiness
-      ElbSslCertArn:
-        default: SSL Cert ARN
-      CookieExpirationPeriod:
-        default: Cookie Expiration Period
-      SetupElbLogging:
-        default: Setup ELB Logging
-      AllowHttpToElbRuleNumber:
-        default: HTTP Internet to ELB
-      AllowHttpsToElbRuleNumber:
-        default: HTTPS Internet to ELB
-      # EFS
-      EfsMountPoint1:
-        default: EFS Mount Point 1
-      EfsMountPoint2:
-        default: EFS Mount Point 2
-      EfsFileSystemId1:
-        default: EFS FileMount Point 3
-      EfsFileSystemId1:
-        default: Maximum Count
-      AsgSnsTopicArn:
-        default: SNS Topic ARN
+      PublicSubnetIdList:
+        default: Public Subnet ID List
+      ProxySecurityGroupCidr:
+        default: Proxy Security Group CIDR
+      OtherSecurityGroupsList:
+        default: Other Security Groups List
+      ProxyFqdn:
+        default: Proxy FQDN
+
+      # Instance Settings
+      KeyPairName:
+        default: EC2 Key Pair Name
+      InstanceType:
+        default: Instance Type
+
       # Deployment
-      ChefClientVersion:
-        default: Chef Client Version
-      S3DeployBucketName:
-        default: S3 Deploy Bucket Name
-      CookbookVersion:
-        default: Cookbook Version
-      ChefEnvironment:
-        default: Chef Environment
-      ChefRole:
-        default: Chef Role
-      ChefDataBagSecret:
-        default: Chef Data Bag Secret
-      WebContentVersion:
-        default: Web Content Version
+      SquidPort:
+        default: Squid TCP Port
