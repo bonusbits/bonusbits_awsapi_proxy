@@ -7,9 +7,6 @@ AllCops:
     - '*.lock'
     - 'vendor/**/*'
 
-Documentation:
-  Enabled: true
-
 Metrics/LineLength:
   Max: 200
 
@@ -37,4 +34,7 @@ Encoding:
   Enabled: false
 
 Documentation:
+  Enabled: false
+
+Style/FrozenStringLiteralComment:
   Enabled: false

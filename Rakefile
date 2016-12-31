@@ -53,7 +53,7 @@ namespace :integration do
 end
 
 desc 'Foodcritic, Rubocop & ChefSpec'
-task dev: %w(style:chef style:ruby unit:rspec)
+task default: %w(style:chef style:ruby unit:rspec)
 
 desc 'Foodcritic & Rubocop'
 task style_only: %w(style:chef style:ruby)
@@ -62,7 +62,8 @@ desc 'Travis CI Tasks'
 task travisci: %w(style:chef style:ruby unit:rspec)
 
 desc 'Circle CI Tasks'
-task circleci: %w(style:chef style:ruby unit:circleci_rspec)
+# task circleci: %w(style:chef style:ruby unit:circleci_rspec)
+task circleci: %w(style:chef style:ruby)
 
 desc 'Foodcritic, Rubocop, ChefSpec and EC2 Integration Tests'
 task ec2_ci: %w(style:chef style:ruby unit:rspec integration:ec2)
