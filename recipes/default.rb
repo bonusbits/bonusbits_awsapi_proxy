@@ -12,3 +12,7 @@ cron 'yum_update_security' do
   user 'root'
   command 'yum -y update --security'
 end
+
+# Deploy DNS Update Script
+# **Last so if anything bombs it doesn't update DNS**
+include_recipe 'bonusbits_awsapi_proxy::dns' if node['bonusbits_awsapi_proxy']['dns']['configure']

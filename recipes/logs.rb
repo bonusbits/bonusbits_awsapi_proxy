@@ -11,7 +11,7 @@ template '/etc/awslogs/awscli.conf' do
   source 'awscli.conf.erb'
   owner 'root'
   group 'root'
-  mode 00755
+  mode '0755'
 end
 
 # Deploy AWS CloudWatch Logs Config
@@ -19,7 +19,7 @@ template '/etc/awslogs/awslogs.conf' do
   source 'awslogs.conf.erb'
   owner 'root'
   group 'root'
-  mode 00755
+  mode '0755'
   notifies :restart, 'service[awslogs]', :delayed
 end
 
@@ -28,7 +28,7 @@ template '/usr/sbin/publish-squid-metrics' do
   source 'publish-squid-metrics.sh.erb'
   owner 'root'
   group 'root'
-  mode 00755
+  mode '0755'
   notifies :restart, 'service[awslogs]', :delayed
 end
 

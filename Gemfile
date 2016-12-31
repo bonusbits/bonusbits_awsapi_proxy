@@ -1,22 +1,21 @@
 source 'https://rubygems.org'
 
-gem 'rake', '~> 11.3.0'
-gem 'berkshelf', '~> 5.1.0'
+gem 'berkshelf', '~> 5.2.0'
+gem 'rake', '~> 12.0.0'
 
 group :lint do
-  gem 'foodcritic', '~> 7.1.0'
-  gem 'rubocop', '~> 0.39.0'
+  gem 'foodcritic', '~> 8.1.0'
   gem 'rainbow', '~> 2.1.0'
+  gem 'rubocop', '~> 0.46.0'
 end
 
 group :unit do
-  gem 'chefspec', '~> 5.2.0'
-  gem 'chef-sugar', '~> 3.4.0'
-  gem 'fauxhai', '~> 3.9.0'
-  gem 'coveralls', '~> 0.8.0'
+  gem 'chefspec', '~> 5.3.0'
+  gem 'coveralls', '~> 0.8.15'
+  gem 'fauxhai', '~> 3.10.0'
 end
 
 group :integration do
-  gem 'test-kitchen', '~> 1.13.2'
-  gem 'kitchen-docker', '~> 2.6.0'
+  gem 'kitchen-ec2', '~> 1.2.0'
+  gem 'test-kitchen', '~> 1.14.2'
 end

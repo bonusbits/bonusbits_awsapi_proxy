@@ -1,5 +1,5 @@
 {
-  "name": "bonusbits_awsapi_proxy",
+  "name": "bonusbits_awsapi_proxy_prd",
   "description": "Environment",
   "cookbook_versions": {},
   "json_class": "Chef::Environment",
@@ -9,15 +9,16 @@
   "override_attributes": {
     "bonusbits_awsapi_proxy": {
       "aws": {
-        "allowed_cidr_block": "10.0.0.0/16",
-        "stack_name": "dev-proxy-test"
+        "allowed_cidr_block": "10.80.0.0/16",
+        "stack_name": "bonusbits-prd-proxy-test"
       },
       "dns": {
-        "configure": false,
-        "proxy_fqdn": "proxy.example.com"
+        "configure": true,
+        "proxy_fqdn": "proxy.bonusbits-prd-us-west-2.com",
+        "hosted_zone_id": "ZL2NU080C8DF0"
       },
       "logs": {
-        "cloudwatch_log_group": "dev-proxy-test"
+        "cloudwatch_log_group": "bonusbits-prd-proxy-test"
       },
       "squid": {
         "port": "3128"

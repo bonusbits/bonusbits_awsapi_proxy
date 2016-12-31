@@ -16,7 +16,7 @@ driver:
 
 provisioner:
   name: chef_zero
-  require_chef_omnibus: 12.15.19
+  require_chef_omnibus: 12.17.44
   data_bags_path: test/data_bags
   encrypted_data_bag_secret_key_path: test/data_bags/encrypted_data_bag_secret
   roles_path: test/roles
@@ -45,7 +45,14 @@ transport:
   ssh_key: <%= ENV['AWS_SSH_KEY_PATH'] %>
 
 suites:
-  - name: default
+  - name: dev
+    run_list:
+      - role[bonusbits_awsapi_proxy]
+    provisioner:
+      client_rb:
+        environment: bonusbits_awsapi_proxy_dev
+    includes: [amzn-2016-latest-ebs]
+  - name: prd
     run_list:
       - role[bonusbits_awsapi_proxy]
     provisioner:

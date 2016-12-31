@@ -25,6 +25,9 @@ Parameters:
   ProxyFqdn:
     Type: String
     Description: Hosted Route53 Domain FQDN (proxy.example.com).
+  HostedZoneId:
+    Type: String
+    Description: Route53 Hosted Zone ID (Z1234567890).
 
   # Instance
   KeyPairName:
@@ -351,6 +354,11 @@ Resources:
                           "allowed_cidr_block": "${AllowedCidr}",
                           "stack_name": "${StackName}"
                         },
+                        "dns": {
+                          "configure": true,
+                          "proxy_fqdn": "${ProxyFqdn}",
+                          "hosted_zone_id": "${HostedZoneId}"
+                        },
                         "logs": {
                           "cloudwatch_log_group": "${CloudWatchLogsGroup}"
                         },
@@ -364,6 +372,8 @@ Resources:
                     ChefEnvironment: !FindInMap [ Deploy, Chef, Environment ],
                     AllowedCidr: !Ref ProxySecurityGroupCidr,
                     StackName: !Ref "AWS::StackName",
+                    ProxyFqdn: !Ref ProxyFqdn,
+                    HostedZoneId: !Ref HostedZoneId,
                     CloudWatchLogsGroup: !Ref CloudWatchLogsGroup,
                     SquidPort: !Join [ "", [ !Ref SquidPort ] ] # Has to be a String
                   }

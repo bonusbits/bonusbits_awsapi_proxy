@@ -1,5 +1,5 @@
 # Source Networks
-acl vpc_cidr src <%= node['bonusbits_awsapi_proxy']['aws']['vpc_cidr_block'] %>
+acl allowed_cidr src <%= node['bonusbits_awsapi_proxy']['aws']['allowed_cidr_block'] %>
 
 # Ports
 acl SSL_ports port 443
@@ -31,7 +31,9 @@ http_access deny manager
 http_access deny to_localhost
 
 ## Wordpress
+acl wordpress dstdom_regex wordpress\.com
 acl wordpress dstdom_regex \.wordpress\.com
+acl wordpress dstdom_regex wordpress\.org
 acl wordpress dstdom_regex \.wordpress\.org
 
 ## Google Docs
@@ -39,24 +41,34 @@ acl google_docs dstdom_regex docs\.google\.com
 
 ## Ruby Gems
 acl ruby_gems dstdom_regex rubygems\.org
+acl ruby_gems dstdom_regex \.rubygems\.org
+
+## GitHub Git-LFS RPM Source
+acl packagecloud dstdom_regex packagecloud\.io
+acl packagecloud dstdom_regex \.packagecloud\.io
 
 ## Python NPM
 acl npm dstdom_regex npmjs\.com
+acl npm dstdom_regex \.npmjs\.com
 acl npm dstdom_regex npmjs\.org
+acl npm dstdom_regex \.npmjs\.org
 
 ## Chef
+acl chef dstdom_regex \.chef\.io
 acl chef dstdom_regex omnitruck\.chef\.io
 acl chef dstdom_regex packages\.chef\.io
 
 ## GitHub
-acl github dstdomain github.com
+acl github dstdom_regex github\.com
+acl github dstdom_regex \.github\.com
 
 # Allow HTTP Access Rules
-http_access allow vpc_cidr google_docs
-http_access allow vpc_cidr ruby_gems
-http_access allow vpc_cidr npm
-http_access allow vpc_cidr chef
-http_access allow vpc_cidr github
+http_access allow allowed_cidr google_docs
+http_access allow allowed_cidr ruby_gems
+http_access allow allowed_cidr npm
+http_access allow allowed_cidr chef
+http_access allow allowed_cidr github
+http_access allow allowed_cidr packagecloud
 http_access allow localhost
 
 # And finally deny all other access to this proxy
@@ -66,7 +78,7 @@ http_access deny all
 http_port <%= node['bonusbits_awsapi_proxy']['squid']['port'] %>
 
 # Uncomment and adjust the following to add a disk cache directory.
-#cache_dir ufs /var/spool/squid 15000 16 256
+cache_dir ufs /var/spool/squid 15000 16 256
 
 # Leave coredumps in the first cache dir
 coredump_dir /var/spool/squid

@@ -28,6 +28,10 @@
     "ParameterValue": "proxy.mydomain.com"
   },
   {
+    "ParameterKey": "HostedZoneId",
+    "ParameterValue": "ABCD1234567890"
+  },
+  {
     "ParameterKey": "KeyPairName",
     "ParameterValue": "stack-uswest2-dev"
   },
