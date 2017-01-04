@@ -3,7 +3,7 @@ source 'https://rubygems.org'
 gem 'berkshelf', '~> 5.2.0'
 gem 'rake', '~> 12.0.0'
 
-group :lint do
+group :style do
   gem 'chef', '12.17.44'
   gem 'foodcritic', '~> 8.1.0'
   gem 'rainbow', '~> 2.1.0'
@@ -19,6 +19,7 @@ group :unit do
 end
 
 group :integration do
+  gem 'inspec', '~> 1.7.2'
   gem 'kitchen-ec2', '~> 1.2.0'
   gem 'test-kitchen', '~> 1.14.2'
 end
