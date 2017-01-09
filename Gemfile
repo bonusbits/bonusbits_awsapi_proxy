@@ -3,7 +3,7 @@ source 'https://rubygems.org'
 gem 'berkshelf', '~> 5.2.0'
 gem 'rake', '~> 12.0.0'
 
-group :lint do
+group :style do
   gem 'chef', '12.17.44'
   gem 'foodcritic', '~> 8.1.0'
   gem 'rainbow', '~> 2.1.0'

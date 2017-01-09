@@ -19,9 +19,10 @@ Parameters:
   ProxySecurityGroupCidr:
     # TODO: Make List?
     Type: String
-  OtherSecurityGroupsList:
-    Type: List<AWS::EC2::SecurityGroup::Id>
-    Description: "Optional - Other Security Groups (Can be Blank)"
+  InternalAccessSecurityGroup:
+    Type: AWS::EC2::SecurityGroup::Id
+  RemoteSecurityGroup:
+    Type: AWS::EC2::SecurityGroup::Id
   ProxyFqdn:
     Type: String
     Description: Hosted Route53 Domain FQDN (proxy.example.com).
@@ -237,8 +238,9 @@ Resources:
       InstanceType: !Ref InstanceType
       KeyName: !Ref KeyPairName
       SecurityGroups:
-      - !Ref ProxySecurityGroup
-      - !Ref OtherSecurityGroupsList
+        - !Ref ProxySecurityGroup
+        - !Ref InternalAccessSecurityGroup
+        - !Ref RemoteSecurityGroup
       ImageId: !FindInMap [ RegionMap, !Ref "AWS::Region", EBS ]
       InstanceMonitoring: false
       BlockDeviceMappings:
@@ -249,12 +251,12 @@ Resources:
             VolumeSize: 8
       UserData:
         Fn::Base64: !Sub
-            - '#!/bin/bash -xe
-              yum update -y
-              yum install -y aws-cfn-bootstrap cloud-init aws-cli git
-              rpm -ivh https://packagecloud.io/github/git-lfs/packages/el/6/git-lfs-${GitLfsVersion}.el6.x86_64.rpm/download
-              /opt/aws/bin/cfn-init -v --stack ${StackName} --resource LaunchConfiguration --region ${Region} --configsets ec2_setup
-              /opt/aws/bin/cfn-signal -e $? --stack ${StackName} --resource AutoScalingGroup --region ${Region}'
+            - "#!/bin/bash -xe\n
+          yum update -y\n
+          yum install -y aws-cfn-bootstrap cloud-init aws-cli git\n
+          rpm -ivh https://packagecloud.io/github/git-lfs/packages/el/6/git-lfs-${GitLfsVersion}.el6.x86_64.rpm/download\n
+          /opt/aws/bin/cfn-init -v --stack ${StackName} --resource LaunchConfiguration --region ${Region} --configsets ec2_setup\n
+          /opt/aws/bin/cfn-signal -e $? --stack ${StackName} --resource AutoScalingGroup --region ${Region}\n"
             - {
                 GitLfsVersion: !FindInMap [ Deploy, Packages, GitLfsVersion ],
                 StackName: !Ref "AWS::StackName",
@@ -297,11 +299,12 @@ Resources:
                   - /etc/cfn/hooks.d/cfn-auto-reloader.conf
         install_chef_client:
           commands:
-            01_install_chef_client: !Sub
-            - "curl -L https://omnitruck.chef.io/install.sh | sudo bash -s -- -v ${ChefClientVersion}"
-            - {
-                ChefClientVersion: !FindInMap [ Deploy, Chef, ClientVersion ]
-              }
+            01_install_chef_client:
+              command: !Sub
+                - "curl -L https://omnitruck.chef.io/install.sh | bash -s -- -v ${ChefClientVersion}"
+                - {
+                    ChefClientVersion: !FindInMap [ Deploy, Chef, ClientVersion ]
+                  }
         setup_chef_client:
           commands:
             01_mkdir_chef_repo:
@@ -328,7 +331,7 @@ Resources:
           files:
             "/opt/chef-repo/client.rb":
               content: !Sub |
-                node_name '$(curl -s http://169.254.169.254/latest/meta-data/placement/instance-id)'
+                node_name 'ec2_node'
                 checksum_path '/opt/chef-repo/checksums'
                 file_cache_path '/opt/chef-repo/cache'
                 file_backup_path '/opt/chef-repo/backup'
@@ -338,38 +341,37 @@ Resources:
                 encrypted_data_bag_secret '/opt/chef-repo/data_bags/encrypted_data_bag_secret'
                 role_path '/opt/chef-repo/roles'
                 chef_server_url 'http://127.0.0.1:8889'
-            "/opt/chef-repo/environments/${ChefEnvironment}.json":
+            "/opt/chef-repo/environments/ec2_environment.json":
               content: !Sub
-                - '{
-                    "name": "${ChefEnvironment}",
-                    "description": "Environment",
-                    "cookbook_versions": {},
-                    "json_class": "Chef::Environment",
-                    "chef_type": "environment",
-                    "default_attributes": {
-                    },
-                    "override_attributes": {
-                      "bonusbits_awsapi_proxy": {
-                        "aws": {
-                          "allowed_cidr_block": "${AllowedCidr}",
-                          "stack_name": "${StackName}"
-                        },
-                        "dns": {
-                          "configure": true,
-                          "proxy_fqdn": "${ProxyFqdn}",
-                          "hosted_zone_id": "${HostedZoneId}"
-                        },
-                        "logs": {
-                          "cloudwatch_log_group": "${CloudWatchLogsGroup}"
-                        },
-                        "squid": {
-                          "port": "${SquidPort}"
-                        }
-                      }
-                    }
-                  }'
+                - "{\n
+                  \"name\": \"ec2_environment\",\n
+                  \"description\": \"Environment\",\n
+                  \"cookbook_versions\": {},\n
+                  \"json_class\": \"Chef::Environment\",\n
+                  \"chef_type\": \"environment\",\n
+                  \"default_attributes\": {\n
+                  },\n
+                  \"override_attributes\": {\n
+                    \"bonusbits_awsapi_proxy\": {\n
+                      \"aws\": {\n
+                        \"allowed_cidr_block\": \"${AllowedCidr}\",\n
+                        \"stack_name\": \"${StackName}\"\n
+                      },\n
+                      \"dns\": {\n
+                        \"configure\": true,\n
+                        \"proxy_fqdn\": \"${ProxyFqdn}\",\n
+                        \"hosted_zone_id\": \"${HostedZoneId}\"\n
+                      },\n
+                      \"logs\": {\n
+                        \"cloudwatch_log_group\": \"${CloudWatchLogsGroup}\"\n
+                      },\n
+                      \"squid\": {\n
+                        \"port\": \"${SquidPort}\"\n
+                      }\n
+                    }\n
+                  }\n
+                }"
                 - {
-                    ChefEnvironment: !FindInMap [ Deploy, Chef, Environment ],
                     AllowedCidr: !Ref ProxySecurityGroupCidr,
                     StackName: !Ref "AWS::StackName",
                     ProxyFqdn: !Ref ProxyFqdn,
@@ -377,24 +379,23 @@ Resources:
                     CloudWatchLogsGroup: !Ref CloudWatchLogsGroup,
                     SquidPort: !Join [ "", [ !Ref SquidPort ] ] # Has to be a String
                   }
-            "/opt/chef-repo/roles/${ChefRole}.json":
+            "/opt/chef-repo/roles/ec2_role.json":
               content: !Sub
-                - '{
-                    "name": "${ChefRole}",
-                    "description": "Role",
-                    "json_class": "Chef::Role",
-                    "default_attributes": {},
-                    "override_attributes": {
-                    },
-                    "chef_type": "role",
-                    "run_list": [
-                      "recipe[${CookbookName}]"
-                    ],
-                    "env_run_lists": {
-                    }
-                  }'
+                - "{\n
+                  \"name\": \"ec2_role\",\n
+                  \"description\": \"Role\",\n
+                  \"json_class\": \"Chef::Role\",\n
+                  \"default_attributes\": {},\n
+                  \"override_attributes\": {\n
+                  },\n
+                  \"chef_type\": \"role\",\n
+                  \"run_list\": [\n
+                    \"recipe[${CookbookName}]\"\n
+                  ],\n
+                  \"env_run_lists\": {\n
+                  }\n
+                }"
                 - {
-                    ChefRole: !FindInMap [ Deploy, Chef, Role ],
                     CookbookName: !FindInMap [ Deploy, Chef, CookbookName ],
                   }
         run_chef_client:
@@ -402,7 +403,7 @@ Resources:
             01_run_chef:
               cwd: /opt/chef-repo
               command: !Sub
-                - /opt/chef/bin/chef-client -z -o 'role[${ChefRole}]' --environment ${ChefEnvironment} --config /opt/chef-repo/client.rb --log_level info --force-formatter --chef-zero-port 8889
+                - /opt/chef/bin/chef-client -z -o role[ec2_role] --environment ec2_environment --config /opt/chef-repo/client.rb --log_level info --force-formatter --chef-zero-port 8889
                 - {
                     ChefRole: !FindInMap [ Deploy, Chef, Role ],
                     ChefEnvironment: !FindInMap [ Deploy, Chef, Environment ],
@@ -410,8 +411,7 @@ Resources:
         update_dns:
           commands:
             01_update_dns:
-              cwd: /opt/chef-repo
-              command: "/opt/chef-repo/update-dns.sh"
+              command: "/usr/sbin/update-dns"
         warm_ebs:
           commands:
             01_warm_ebs:
@@ -443,9 +443,12 @@ Outputs:
   ProxySecurityGroupCidr:
     Description: CIDR to Allow Through Proxy (Usually VPC).
     Value: !Ref ProxySecurityGroupCidr
-  OtherSecurityGroupsList:
-    Description: Other Elected Security Groups List.
-    Value: !Join [ ",", !Ref OtherSecurityGroupsList ]
+  InternalAccessSecurityGroup:
+    Description: Internal Access Security Group.
+    Value: !Ref InternalAccessSecurityGroup
+  RemoteSecurityGroup:
+    Description: Remote Access Security Group.
+    Value: !Ref RemoteSecurityGroup
   ProxyURL:
     Description: Proxy URL
     Value: !Join [ "", [ "http://", !Ref ProxyFqdn, ":", !Ref SquidPort ] ]
@@ -495,7 +498,8 @@ Metadata:
           - VPC
           - PublicSubnetIdList
           - ProxySecurityGroupCidr
-          - OtherSecurityGroupsList
+          - InternalAccessSecurityGroup
+          - RemoteSecurityGroup
           - ProxyFqdn
       - Label:
           default: Instance
@@ -520,8 +524,10 @@ Metadata:
         default: Public Subnet ID List
       ProxySecurityGroupCidr:
         default: Proxy Security Group CIDR
-      OtherSecurityGroupsList:
-        default: Other Security Groups List
+      InternalAccessSecurityGroup:
+        default: Internal Access Security Group
+      RemoteSecurityGroup:
+        default: Remote Access Security Group
       ProxyFqdn:
         default: Proxy FQDN
 

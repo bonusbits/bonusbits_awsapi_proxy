@@ -3,18 +3,20 @@ require 'bundler/setup'
 
 # Style tests. Rubocop and Foodcritic
 namespace :style do
-  require 'rubocop/rake_task'
   require 'foodcritic'
-  desc 'RuboCop'
-  RuboCop::RakeTask.new(:ruby)
-
   desc 'FoodCritic'
   FoodCritic::Rake::LintTask.new(:chef) do |task|
     task.options = {
       fail_tags: ['correctness'],
-      chef_version: '12.17.44',
+      chef_version: '12.15.19',
       tags: %w(~FC001 ~FC019 ~FC016 ~FC039)
     }
+  end
+
+  require 'rubocop/rake_task'
+  desc 'RuboCop'
+  RuboCop::RakeTask.new(:ruby) do |task|
+    task.options = ['--display-cop-names']
   end
 end
 
