@@ -256,7 +256,7 @@ Resources:
           yum install -y aws-cfn-bootstrap cloud-init aws-cli git
           rpm -ivh https://packagecloud.io/github/git-lfs/packages/el/6/git-lfs-${GitLfsVersion}.el6.x86_64.rpm/download
           /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource LaunchConfiguration --region ${AWS::Region} --configsets ec2_setup
-          /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource AutoScalingGroup --region ${AWS::Region}"
+          /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource AutoScalingGroup --region ${AWS::Region}
     Metadata:
       AWS::CloudFormation::Init:
         configSets:
