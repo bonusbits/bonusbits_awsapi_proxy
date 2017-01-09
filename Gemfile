@@ -19,6 +19,7 @@ group :unit do
 end
 
 group :integration do
+  gem 'inspec', '~> 1.7.2'
   gem 'kitchen-ec2', '~> 1.2.0'
   gem 'test-kitchen', '~> 1.14.2'
 end
