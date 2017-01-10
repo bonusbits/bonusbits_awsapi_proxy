@@ -4,7 +4,7 @@
 
 # Purpose
 Deploy an EC2 Instance running Squid 3.5.11 Proxy server on public subnets. 
-Configured to allow all private instances in the VPC CIDR Block access to AWS API services only (No internet access).
+Configured to allow all private instances in the VPC CIDR Block access to AWS API services and a few DevOps site only (No Full internet access).
 Setup in Autoscaling Group of 1 to give HA if the hardware side fails or AZ then will spin up new one in another AZ.
 Setup by Chef Cookbook utilizing Chef Zero. Pulling the Cookbook from this repo as needed.
 DNS Script setup to update Route53 Internal DNS when new one spins up.
