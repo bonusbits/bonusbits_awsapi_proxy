@@ -469,6 +469,7 @@ Metadata:
           - ProxySecurityGroupCidr
           - InternalAccessSecurityGroup
           - ProxyFqdn
+          - HostedZoneId
       - Label:
           default: Instance
         Parameters:
@@ -499,6 +500,8 @@ Metadata:
         default: Internal Access Security Group
       ProxyFqdn:
         default: Proxy FQDN
+      HostedZoneId:
+        default: Hosted Zone Id
 
       # Instance Settings
       KeyPairName:
