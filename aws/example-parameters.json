@@ -24,10 +24,6 @@
 		"ParameterValue": "sg-0000000"
 	},
 	{
-		"ParameterKey": "RemoteSecurityGroup",
-		"ParameterValue": "sg-0000000"
-	},
-	{
 		"ParameterKey": "ProxyFqdn",
 		"ParameterValue": "proxy.mydomain.com"
 	},

@@ -1,6 +1,6 @@
 ---
 AWSTemplateFormatVersion: '2010-09-09'
-Description: Create a Squid Proxy Instance for AWS API Access to Private Networks without Internet Access by Levon Becker v20161209-1430
+Description: Create a Squid Proxy Instance for AWS API Access to Private Networks without Internet Access by Levon Becker v20160109-2030
 Parameters:
   # Ownership
   Owner:
@@ -20,8 +20,6 @@ Parameters:
     # TODO: Make List?
     Type: String
   InternalAccessSecurityGroup:
-    Type: AWS::EC2::SecurityGroup::Id
-  RemoteSecurityGroup:
     Type: AWS::EC2::SecurityGroup::Id
   ProxyFqdn:
     Type: String
@@ -240,7 +238,6 @@ Resources:
       SecurityGroups:
         - !Ref ProxySecurityGroup
         - !Ref InternalAccessSecurityGroup
-        - !Ref RemoteSecurityGroup
       ImageId: !FindInMap [ RegionMap, !Ref "AWS::Region", EBS ]
       InstanceMonitoring: false
       BlockDeviceMappings:
@@ -424,9 +421,6 @@ Outputs:
   InternalAccessSecurityGroup:
     Description: Internal Access Security Group.
     Value: !Ref InternalAccessSecurityGroup
-  RemoteSecurityGroup:
-    Description: Remote Access Security Group.
-    Value: !Ref RemoteSecurityGroup
   ProxyURL:
     Description: Proxy URL
     Value: !Join [ "", [ "http://", !Ref ProxyFqdn, ":", !Ref SquidPort ] ]
@@ -474,7 +468,6 @@ Metadata:
           - PublicSubnetIdList
           - ProxySecurityGroupCidr
           - InternalAccessSecurityGroup
-          - RemoteSecurityGroup
           - ProxyFqdn
       - Label:
           default: Instance
@@ -504,8 +497,6 @@ Metadata:
         default: Proxy Security Group CIDR
       InternalAccessSecurityGroup:
         default: Internal Access Security Group
-      RemoteSecurityGroup:
-        default: Remote Access Security Group
       ProxyFqdn:
         default: Proxy FQDN
 
