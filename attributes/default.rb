@@ -11,3 +11,6 @@ default['bonusbits_awsapi_proxy'].tap do |root|
   # Paths
   root['local_download_path'] = '/opt/chef-repo/downloads'
 end
+
+region = node['ec2']['placement_availability_zone'].slice(0..-2)
+default['bonusbits_awsapi_proxy']['aws']['region'] = region

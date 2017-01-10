@@ -46,10 +46,10 @@ Parameters:
   # Deployment
   CookbookVersion:
     Type: String
-    Default: 1.0.1
+    Default: 1.0.2
   ChefClientVersion:
     Type: String
-    Default: 12.16.42
+    Default: 12.17.44
   GitLfsVersion:
     Type: String
     Default: 1.5.4-1

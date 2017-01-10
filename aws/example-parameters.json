@@ -40,6 +40,18 @@
 		"ParameterValue": "t2.nano"
 	},
 	{
+		"ParameterKey": "ChefClientVersion",
+		"ParameterValue": "12.17.44"
+	},
+	{
+		"ParameterKey": "CookbookVersion",
+		"ParameterValue": "1.0.2"
+	},
+	{
+		"ParameterKey": "GitLfsVersion",
+		"ParameterValue": "1.5.4-1"
+	},
+	{
 		"ParameterKey": "SquidPort",
 		"ParameterValue": "3128"
 	}

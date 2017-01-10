@@ -1,11 +1,6 @@
 # Install CloudWatch Logs Agent
 package 'awslogs'
 
-region = BonusBits::AWS.fetch_metadata('region')
-node.default['bonusbits_awsapi_proxy']['aws']['region'] = region
-instance_id = BonusBits::AWS.fetch_metadata('instance-id')
-node.default['bonusbits_awsapi_proxy']['aws']['instance_id'] = instance_id
-
 # Deploy AWS CLI Config
 template '/etc/awslogs/awscli.conf' do
   source 'awscli.conf.erb'
